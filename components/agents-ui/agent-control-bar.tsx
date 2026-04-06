@@ -71,14 +71,35 @@ function AgentChatInput({ chatOpen, onSend = async () => {}, className }: AgentC
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [isSending, setIsSending] = useState(false);
   const [message, setMessage] = useState<string>('');
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setImage(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setImagePreview(null);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImage(null);
+    setImagePreview(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     try {
       setIsSending(true);
+      // For now, just send the message. Backend image upload to be implemented next.
       await onSend(message);
       setMessage('');
+      setImage(null);
+      setImagePreview(null);
     } catch (error) {
       console.error(error);
     } finally {
@@ -86,11 +107,10 @@ function AgentChatInput({ chatOpen, onSend = async () => {}, className }: AgentC
     }
   };
 
-  const isDisabled = isSending || message.trim().length === 0;
+  const isDisabled = isSending || (message.trim().length === 0 && !image);
 
   useEffect(() => {
     if (chatOpen) return;
-    // when not disabled refocus on input
     inputRef.current?.focus();
   }, [chatOpen]);
 
@@ -108,6 +128,25 @@ function AgentChatInput({ chatOpen, onSend = async () => {}, className }: AgentC
         onChange={(e) => setMessage(e.target.value)}
         className="field-sizing-content max-h-16 min-h-8 flex-1 py-2 [scrollbar-width:thin] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       />
+      <label className="self-end cursor-pointer flex items-center gap-1 px-2 py-1 border border-primary rounded bg-accent/30 hover:bg-accent transition-colors">
+        <input
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleImageChange}
+          disabled={!chatOpen}
+        />
+        <PaperclipIcon className="w-5 h-5 text-primary" />
+        <span className="text-xs text-primary font-medium">Upload Image</span>
+      </label>
+      {imagePreview && (
+        <div className="relative self-end">
+          <img src={imagePreview} alt="preview" className="w-10 h-10 object-cover rounded" />
+          <button type="button" onClick={handleRemoveImage} className="absolute -top-2 -right-2 bg-background rounded-full p-0.5 shadow">
+            <XIcon className="w-4 h-4 text-destructive" />
+          </button>
+        </div>
+      )}
       <Button
         size="icon"
         type="submit"

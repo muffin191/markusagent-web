@@ -172,7 +172,7 @@ export function AgentAudioVisualizerBar({
   );
 
   return (
-    <div className={cn(AgentAudioVisualizerBarVariants({ size }), className)} {...props}>
+    <div className={cn('hidden', AgentAudioVisualizerBarVariants({ size }), className)} {...props}>
       {bands.map((band: number, idx: number) =>
         children ? (
           <React.Fragment key={idx}>

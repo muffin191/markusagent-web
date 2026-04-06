@@ -172,7 +172,7 @@ export function AgentAudioVisualizerRadial({
 
   return (
     <div
-      className={cn(AgentAudioVisualizerRadialVariants({ size }), 'relative', className)}
+      className={cn('hidden', AgentAudioVisualizerRadialVariants({ size }), 'relative', className)}
       {...props}
     >
       {bands.map((band, idx) => {

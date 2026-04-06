@@ -2,7 +2,6 @@
 
 import { AnimatePresence } from 'motion/react';
 import { type AgentState, type ReceivedMessage } from '@livekit/components-react';
-import { AgentChatIndicator } from '@/components/agents-ui/agent-chat-indicator';
 import {
   Conversation,
   ConversationContent,
@@ -69,7 +68,7 @@ export function AgentChatTranscript({
           );
         })}
         <AnimatePresence>
-          {agentState === 'thinking' && <AgentChatIndicator size="sm" />}
+          {null}
         </AnimatePresence>
       </ConversationContent>
       <ConversationScrollButton />

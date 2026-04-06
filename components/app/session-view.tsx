@@ -112,7 +112,15 @@ export const SessionView = ({
   }, [messages]);
 
   return (
-    <section className="bg-background relative z-10 h-svh w-svw overflow-hidden" {...props}>
+    <section className="relative z-10 h-svh w-svw overflow-hidden bg-transparent" {...props}>
+      {/* Background with Markus Jarvis image */}
+      <div className="absolute inset-0 z-50 flex items-center justify-center opacity-70 pointer-events-none">
+        <img
+          src="/markus_jarvis.avif"
+          alt="Markus Jarvis"
+          className="w-96 h-96 rounded-full object-cover"
+        />
+      </div>
       <Fade top className="absolute inset-x-4 top-0 z-10 h-40" />
       {/* transcript */}
       <ChatTranscript
@@ -130,17 +138,7 @@ export const SessionView = ({
         {/* Pre-connect message */}
         {appConfig.isPreConnectBufferEnabled && (
           <AnimatePresence>
-            {messages.length === 0 && (
-              <MotionMessage
-                key="pre-connect-message"
-                duration={2}
-                aria-hidden={messages.length > 0}
-                {...SHIMMER_MOTION_PROPS}
-                className="pointer-events-none mx-auto block w-full max-w-2xl pb-4 text-center text-sm font-semibold"
-              >
-                Agent is listening, ask it a question
-              </MotionMessage>
-            )}
+            {messages.length === 0 && null}
           </AnimatePresence>
         )}
         <div className="bg-background relative mx-auto max-w-2xl pb-3 md:pb-12">
