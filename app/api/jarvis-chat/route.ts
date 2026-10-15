@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 function getBackendCandidates() {
   const envUrl = (process.env.JARVIS_BACKEND_URL ?? '').trim();
-  const candidates = [
-    envUrl,
-    'http://127.0.0.1:5000',
-    'http://localhost:5000',
-  ].filter(Boolean);
+  const candidates = [envUrl, 'http://127.0.0.1:5000', 'http://localhost:5000'].filter(Boolean);
 
   return [...new Set(candidates)];
 }
+
+type BackendHealth = {
+  status?: string;
+  provider?: string;
+  model?: string;
+  active_model?: string;
+  gemini_client_ready?: boolean;
+};
 
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get('mode');
@@ -17,16 +21,32 @@ export async function GET(req: NextRequest) {
   if (mode === 'history') {
     try {
       const userId = String(req.nextUrl.searchParams.get('userId') ?? 'web_user').trim();
-      const response = await fetch(`${BACKEND_URL}/history?user_id=${encodeURIComponent(userId)}`, {
-        cache: 'no-store',
-      });
+      let response: Response | null = null;
+      let lastStatus = 0;
+      let lastText = '';
 
-      if (!response.ok) {
-        const text = await response.text();
+      for (const baseUrl of getBackendCandidates()) {
+        try {
+          const candidate = await fetch(
+            `${baseUrl}/history?user_id=${encodeURIComponent(userId)}`,
+            { cache: 'no-store' }
+          );
+          if (candidate.ok) {
+            response = candidate;
+            break;
+          }
+          lastStatus = candidate.status;
+          lastText = await candidate.text();
+        } catch (error) {
+          lastText = error instanceof Error ? error.message : 'Unknown error';
+        }
+      }
+
+      if (!response) {
         return NextResponse.json(
           {
-            error: `Backend history request failed with ${response.status}.`,
-            details: text,
+            error: `Backend history request failed with ${lastStatus || 502}.`,
+            details: lastText || 'Set JARVIS_BACKEND_URL to a reachable backend API.',
           },
           { status: 502 }
         );
@@ -53,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const candidates = getBackendCandidates();
-    let data: any = null;
+    let data: BackendHealth | null = null;
     let lastStatus = 500;
     let lastText = '';
 
