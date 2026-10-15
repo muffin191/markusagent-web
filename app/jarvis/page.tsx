@@ -512,10 +512,10 @@ export default function JarvisPage() {
       }, 200);
       return;
     }
-    wakeR.current = true;
-    cmdR.current = false;
+    wakeR.current = false;
+    cmdR.current = true;
     setStatus('LISTENING');
-    setTranscript('Say "Hey Jarvis" to continue...');
+    setTranscript('Listening for your next command...');
     setTimeout(() => {
       if (listeningR.current && !speakingR.current) restartRec();
     }, 1500);
