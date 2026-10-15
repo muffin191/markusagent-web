@@ -114,11 +114,11 @@ export const SessionView = ({
   return (
     <section className="relative z-10 h-svh w-svw overflow-hidden bg-transparent" {...props}>
       {/* Background with Markus Jarvis image */}
-      <div className="absolute inset-0 z-50 flex items-center justify-center opacity-70 pointer-events-none">
+      <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center opacity-70">
         <img
           src="/markus_jarvis.avif"
           alt="Markus Jarvis"
-          className="w-96 h-96 rounded-full object-cover"
+          className="h-96 w-96 rounded-full object-cover"
         />
       </div>
       <Fade top className="absolute inset-x-4 top-0 z-10 h-40" />
@@ -137,9 +137,7 @@ export const SessionView = ({
       >
         {/* Pre-connect message */}
         {appConfig.isPreConnectBufferEnabled && (
-          <AnimatePresence>
-            {messages.length === 0 && null}
-          </AnimatePresence>
+          <AnimatePresence>{messages.length === 0 && null}</AnimatePresence>
         )}
         <div className="bg-background relative mx-auto max-w-2xl pb-3 md:pb-12">
           <Fade bottom className="absolute inset-x-0 top-0 h-4 -translate-y-full" />

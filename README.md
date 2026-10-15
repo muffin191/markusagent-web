@@ -160,6 +160,14 @@ AGENT_NAME=
 
 These are required for the voice agent functionality to work with your LiveKit project.
 
+If you are deploying this web app to Vercel and want the STS and chat routes to work, also set:
+
+```env
+JARVIS_BACKEND_URL=https://your-jarvis-backend.example.com
+```
+
+Those API routes proxy to your Jarvis backend for `/chat`, `/sts`, `/history`, and `/sts/status`.
+
 ## Contributing
 
 This template is open source and we welcome contributions! Please open a PR or issue through GitHub, and don't forget to join us in the [LiveKit Community Slack](https://livekit.io/join-slack)!

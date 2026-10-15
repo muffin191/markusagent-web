@@ -9,6 +9,14 @@ type ConnectionDetails = {
   participantToken: string;
 };
 
+type ConnectionRequestBody = {
+  room_config?: {
+    agents?: Array<{
+      agent_name?: string;
+    }>;
+  };
+};
+
 // NOTE: you are expected to define the following environment variables in `.env.local`:
 const API_KEY = process.env.LIVEKIT_API_KEY;
 const API_SECRET = process.env.LIVEKIT_API_SECRET;
@@ -30,13 +38,13 @@ export async function POST(req: Request) {
     }
 
     // Parse agent configuration from request body
-    let body = {};
+    let body: ConnectionRequestBody = {};
     try {
       body = await req.json();
     } catch {
       // Empty or invalid JSON, use empty object
     }
-    const agentName: string = body?.room_config?.agents?.[0]?.agent_name;
+    const agentName = body?.room_config?.agents?.[0]?.agent_name;
 
     // Generate participant token
     const participantName = 'user';

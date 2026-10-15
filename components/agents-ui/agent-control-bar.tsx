@@ -1,8 +1,9 @@
 'use client';
 
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Track } from 'livekit-client';
-import { Loader, MessageSquareTextIcon, SendHorizontal } from 'lucide-react';
+import { Loader, MessageSquareTextIcon, PaperclipIcon, SendHorizontal, XIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useChat } from '@livekit/components-react';
 import { AgentDisconnectButton } from '@/components/agents-ui/agent-disconnect-button';
@@ -128,7 +129,7 @@ function AgentChatInput({ chatOpen, onSend = async () => {}, className }: AgentC
         onChange={(e) => setMessage(e.target.value)}
         className="field-sizing-content max-h-16 min-h-8 flex-1 py-2 [scrollbar-width:thin] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       />
-      <label className="self-end cursor-pointer flex items-center gap-1 px-2 py-1 border border-primary rounded bg-accent/30 hover:bg-accent transition-colors">
+      <label className="border-primary bg-accent/30 hover:bg-accent flex cursor-pointer items-center gap-1 self-end rounded border px-2 py-1 transition-colors">
         <input
           type="file"
           accept="image/*"
@@ -136,17 +137,26 @@ function AgentChatInput({ chatOpen, onSend = async () => {}, className }: AgentC
           onChange={handleImageChange}
           disabled={!chatOpen}
         />
-        <PaperclipIcon className="w-5 h-5 text-primary" />
-        <span className="text-xs text-primary font-medium">Upload Image</span>
+        <PaperclipIcon className="text-primary h-5 w-5" />
+        <span className="text-primary text-xs font-medium">Upload Image</span>
       </label>
       {imagePreview && (
         <div className="relative self-end">
-          <img src={imagePreview} alt="preview" className="w-10 h-10 object-cover rounded" />
-          <button type="button" onClick={handleRemoveImage} className="absolute -top-2 -right-2 bg-background rounded-full p-0.5 shadow">
-            <XIcon className="w-4 h-4 text-destructive" />
+          <img src={imagePreview} alt="preview" className="h-10 w-10 rounded object-cover" />
+          <button
+            type="button"
+            onClick={handleRemoveImage}
+            className="bg-background absolute -top-2 -right-2 rounded-full p-0.5 shadow"
+          >
+            <XIcon className="text-destructive h-4 w-4" />
           </button>
         </div>
       )}
+      <Button asChild size="sm" variant="secondary" className="self-end">
+        <Link href="/jarvis" title="Open STS">
+          STS
+        </Link>
+      </Button>
       <Button
         size="icon"
         type="submit"

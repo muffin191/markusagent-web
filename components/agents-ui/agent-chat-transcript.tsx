@@ -67,9 +67,7 @@ export function AgentChatTranscript({
             </Message>
           );
         })}
-        <AnimatePresence>
-          {null}
-        </AnimatePresence>
+        <AnimatePresence>{null}</AnimatePresence>
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>
