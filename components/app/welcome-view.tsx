@@ -28,7 +28,53 @@ type ChatMessage = {
   createdAt: string;
 };
 
-const CHAT_HISTORY_KEY = 'markus_welcome_chat_history_v1';
+type ChatConversation = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+};
+
+const CHAT_HISTORY_KEY = 'markus_welcome_conversations_v2';
+const LEGACY_CHAT_HISTORY_KEY = 'markus_welcome_chat_history_v1';
+
+function normalizeMessages(value: unknown): ChatMessage[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((raw: unknown, index: number): ChatMessage[] => {
+    const item = raw as Partial<ChatMessage> | null;
+    if (
+      !item ||
+      (item.role !== 'user' && item.role !== 'assistant') ||
+      typeof item.text !== 'string'
+    ) {
+      return [];
+    }
+
+    const createdAt =
+      typeof item.createdAt === 'string' && item.createdAt
+        ? item.createdAt
+        : new Date(Date.now() - (value.length - index) * 1000).toISOString();
+
+    return [
+      {
+        id: typeof item.id === 'string' ? item.id : `${item.role}-${createdAt}-${index}`,
+        role: item.role,
+        text: item.text,
+        createdAt,
+      },
+    ];
+  });
+}
+
+function createConversationId() {
+  return `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getConversationTitle(messages: ChatMessage[]) {
+  const firstUserMessage = messages.find((message) => message.role === 'user');
+  return firstUserMessage?.text.trim().slice(0, 48) || 'New chat';
+}
 
 export const WelcomeView = ({
   startButtonText,
@@ -37,45 +83,146 @@ export const WelcomeView = ({
 }: React.ComponentProps<'div'> & WelcomeViewProps) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorText, setErrorText] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const activeConversationIdRef = useRef<string | null>(null);
+  const activeConversation = conversations.find(
+    (conversation) => conversation.id === activeConversationId
+  );
+  const messages = activeConversation?.messages ?? [];
 
   useEffect(() => {
+    let loadedConversations: ChatConversation[] = [];
+    let selectedConversationId: string | null = null;
+
     try {
       const saved = localStorage.getItem(CHAT_HISTORY_KEY);
-      if (!saved) return;
-      const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed)) return;
+      if (saved) {
+        const parsed = JSON.parse(saved) as {
+          conversations?: unknown;
+          activeConversationId?: unknown;
+        };
+        if (Array.isArray(parsed.conversations)) {
+          loadedConversations = parsed.conversations.flatMap((raw: unknown): ChatConversation[] => {
+            const item = raw as Partial<ChatConversation> | null;
+            if (!item || typeof item.id !== 'string') return [];
+            const normalizedMessages = normalizeMessages(item.messages);
+            const latestMessage = normalizedMessages[normalizedMessages.length - 1];
+            return [
+              {
+                id: item.id,
+                title: getConversationTitle(normalizedMessages),
+                updatedAt:
+                  typeof item.updatedAt === 'string'
+                    ? item.updatedAt
+                    : (latestMessage?.createdAt ?? new Date().toISOString()),
+                messages: normalizedMessages,
+              },
+            ];
+          });
+          if (
+            typeof parsed.activeConversationId === 'string' &&
+            loadedConversations.some(
+              (conversation) => conversation.id === parsed.activeConversationId
+            )
+          ) {
+            selectedConversationId = parsed.activeConversationId;
+          }
+        }
+      }
 
-      const normalized = parsed
-        .filter(
-          (item) =>
-            (item?.role === 'user' || item?.role === 'assistant') && typeof item?.text === 'string'
-        )
-        .map((item, index): ChatMessage => {
-          const timestamp =
-            typeof item?.createdAt === 'string' && item.createdAt
-              ? item.createdAt
-              : new Date(Date.now() - (parsed.length - index) * 1000).toISOString();
-
-          return {
-            id: typeof item?.id === 'string' ? item.id : `${item.role}-${timestamp}-${index}`,
-            role: item.role,
-            text: item.text,
-            createdAt: timestamp,
-          };
-        });
-      setMessages(normalized);
+      if (loadedConversations.length === 0) {
+        const legacy = localStorage.getItem(LEGACY_CHAT_HISTORY_KEY);
+        if (legacy) {
+          const legacyMessages = normalizeMessages(JSON.parse(legacy));
+          if (legacyMessages.length > 0) {
+            const latestMessage = legacyMessages[legacyMessages.length - 1];
+            const conversation: ChatConversation = {
+              id: 'legacy-conversation',
+              title: getConversationTitle(legacyMessages),
+              updatedAt: latestMessage.createdAt,
+              messages: legacyMessages,
+            };
+            loadedConversations = [conversation];
+            selectedConversationId = conversation.id;
+          }
+        }
+      }
     } catch {
       // Ignore invalid local history payloads.
+    } finally {
+      loadedConversations.sort(
+        (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)
+      );
+      selectedConversationId ??= loadedConversations[0]?.id ?? null;
+      activeConversationIdRef.current = selectedConversationId;
+      setConversations(loadedConversations);
+      setActiveConversationId(selectedConversationId);
+      setHistoryLoaded(true);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages));
-  }, [messages]);
+    if (!historyLoaded) return;
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify({ conversations, activeConversationId }));
+  }, [activeConversationId, conversations, historyLoaded]);
+
+  const selectConversation = (conversationId: string | null) => {
+    activeConversationIdRef.current = conversationId;
+    setActiveConversationId(conversationId);
+    setEditingIndex(null);
+    setInput('');
+    setErrorText('');
+  };
+
+  const ensureActiveConversation = () => {
+    let conversationId = activeConversationIdRef.current;
+    if (!conversationId) {
+      conversationId = createConversationId();
+      activeConversationIdRef.current = conversationId;
+      setActiveConversationId(conversationId);
+    }
+
+    const id = conversationId;
+    setConversations((previous) => {
+      if (previous.some((conversation) => conversation.id === id)) return previous;
+      return [
+        {
+          id,
+          title: 'New chat',
+          updatedAt: new Date().toISOString(),
+          messages: [],
+        },
+        ...previous,
+      ];
+    });
+    return id;
+  };
+
+  const updateConversationMessages = (
+    conversationId: string,
+    update: (current: ChatMessage[]) => ChatMessage[]
+  ) => {
+    setConversations((previous) =>
+      previous
+        .map((conversation) => {
+          if (conversation.id !== conversationId) return conversation;
+          const nextMessages = update(conversation.messages);
+          const latestMessage = nextMessages[nextMessages.length - 1];
+          return {
+            ...conversation,
+            title: getConversationTitle(nextMessages),
+            updatedAt: latestMessage?.createdAt ?? conversation.updatedAt,
+            messages: nextMessages,
+          };
+        })
+        .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    );
+  };
 
   const handleEditMessage = (index: number) => {
     const selected = messages[index];
@@ -88,24 +235,27 @@ export const WelcomeView = ({
   };
 
   const clearHistory = () => {
-    setMessages([]);
+    setConversations([]);
+    selectConversation(null);
     setEditingIndex(null);
     setErrorText('');
     setInput('');
     localStorage.removeItem(CHAT_HISTORY_KEY);
+    localStorage.removeItem(LEGACY_CHAT_HISTORY_KEY);
   };
 
   const startNewChat = () => {
-    setEditingIndex(null);
-    setInput('');
-    setErrorText('');
+    selectConversation(createConversationId());
     inputRef.current?.focus();
   };
 
   const handleDeleteUserMessage = (index: number) => {
-    setMessages((prev) => {
-      if (index < 0 || index >= prev.length || prev[index]?.role !== 'user') return prev;
-      const next = [...prev];
+    const conversationId = activeConversationIdRef.current;
+    if (!conversationId) return;
+    updateConversationMessages(conversationId, (previous) => {
+      if (index < 0 || index >= previous.length || previous[index]?.role !== 'user')
+        return previous;
+      const next = [...previous];
       next.splice(index, 1);
       if (next[index]?.role === 'assistant') {
         next.splice(index, 1);
@@ -127,6 +277,7 @@ export const WelcomeView = ({
     setInput('');
     setErrorText('');
     setIsSending(true);
+    const conversationId = ensureActiveConversation();
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -135,16 +286,19 @@ export const WelcomeView = ({
     };
 
     if (editingIndex !== null) {
-      setMessages((prev) => [...prev.slice(0, editingIndex), userMessage]);
+      updateConversationMessages(conversationId, (previous) => [
+        ...previous.slice(0, editingIndex),
+        userMessage,
+      ]);
     } else {
-      setMessages((prev) => [...prev, userMessage]);
+      updateConversationMessages(conversationId, (previous) => [...previous, userMessage]);
     }
 
     try {
       const response = await fetch('/api/jarvis-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, userId: 'web_user' }),
+        body: JSON.stringify({ message, userId: conversationId, memoryUserId: 'web_user_profile' }),
       });
 
       const data = await response.json();
@@ -154,8 +308,8 @@ export const WelcomeView = ({
       }
 
       const reply = String(data?.response ?? 'No response received.').trim();
-      setMessages((prev) => [
-        ...prev,
+      updateConversationMessages(conversationId, (previous) => [
+        ...previous,
         {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
@@ -167,8 +321,8 @@ export const WelcomeView = ({
     } catch (error) {
       const messageText = error instanceof Error ? error.message : 'Unable to send message.';
       setErrorText(messageText);
-      setMessages((prev) => [
-        ...prev,
+      updateConversationMessages(conversationId, (previous) => [
+        ...previous,
         {
           id: `assistant-error-${Date.now()}`,
           role: 'assistant',
@@ -181,9 +335,14 @@ export const WelcomeView = ({
     }
   };
 
-  const historyEntries = messages
-    .map((message, index) => ({ message, index }))
-    .filter((entry) => entry.message.role === 'user');
+  const deleteConversation = (conversationId: string) => {
+    setConversations((previous) =>
+      previous.filter((conversation) => conversation.id !== conversationId)
+    );
+    if (activeConversationIdRef.current === conversationId) {
+      selectConversation(null);
+    }
+  };
 
   return (
     <div ref={ref} className="flex h-svh w-full overflow-hidden">
@@ -212,36 +371,40 @@ export const WelcomeView = ({
 
         {/* History list */}
         <div className="flex-1 space-y-2 overflow-y-auto">
-          {historyEntries.length === 0 && (
+          {conversations.length === 0 && (
             <p className="px-2 pt-4 text-center text-xs text-cyan-100/50">
               Your chats will appear here.
             </p>
           )}
-          {historyEntries.map(({ message, index }) => (
+          {conversations.map((conversation) => (
             <article
-              key={message.id}
-              className="rounded-xl border border-cyan-400/30 bg-[#10234f] p-3"
+              key={conversation.id}
+              className={`rounded-xl border p-3 ${
+                conversation.id === activeConversationId
+                  ? 'border-cyan-300/70 bg-[#173360]'
+                  : 'border-cyan-400/30 bg-[#10234f]'
+              }`}
             >
-              <h3 className="truncate text-sm font-bold text-white uppercase">
-                {message.text.slice(0, 30) || 'New chat'}
-              </h3>
-              <p className="mt-0.5 text-[11px] text-cyan-100/50">
-                {new Date(message.createdAt).toLocaleString()}
-              </p>
+              <button
+                type="button"
+                onClick={() => selectConversation(conversation.id)}
+                className="w-full text-left"
+              >
+                <h3 className="truncate text-sm font-bold text-white">{conversation.title}</h3>
+                <p className="mt-0.5 text-[11px] text-cyan-100/50">
+                  {new Date(conversation.updatedAt).toLocaleString()}
+                </p>
+                <p className="mt-1 text-[11px] text-cyan-100/60">
+                  {conversation.messages.length} messages
+                </p>
+              </button>
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => handleEditMessage(index)}
-                  className="rounded-lg border border-cyan-200/50 px-3 py-1 text-xs font-bold tracking-wider text-cyan-100 uppercase hover:bg-cyan-400/15"
-                >
-                  EDIT
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteUserMessage(index)}
+                  onClick={() => deleteConversation(conversation.id)}
                   className="rounded-lg border border-rose-300/40 px-3 py-1 text-xs font-bold tracking-wider text-rose-200 uppercase hover:bg-rose-400/15"
                 >
-                  DELETE
+                  DELETE CHAT
                 </button>
               </div>
             </article>
@@ -284,10 +447,10 @@ export const WelcomeView = ({
               Send a message to start chatting with Markus.
             </p>
           )}
-          {messages.map((msg) => (
+          {messages.map((msg, index) => (
             <div
               key={msg.id}
-              className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
+              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
             >
               <div
                 className={
@@ -298,6 +461,24 @@ export const WelcomeView = ({
               >
                 {msg.text}
               </div>
+              {msg.role === 'user' && (
+                <div className="mt-1 flex gap-3 text-[11px] text-cyan-100/50">
+                  <button
+                    type="button"
+                    onClick={() => handleEditMessage(index)}
+                    className="hover:text-cyan-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteUserMessage(index)}
+                    className="hover:text-rose-200"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
